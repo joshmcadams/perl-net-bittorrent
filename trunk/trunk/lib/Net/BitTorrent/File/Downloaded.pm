@@ -7,6 +7,7 @@ use IO::File;
 use List::MoreUtils qw(first_index);
 use File::Slurp qw(read_file);
 use Digest::SHA1 qw(sha1);
+use File::Spec;
 
 sub new {
     my ( $class, %args ) = @_;
@@ -28,8 +29,20 @@ sub _check_arguments {
       [ 0 .. $self->{dt_obj}->get_total_piece_count() - 1 ];
     $self->{completed_pieces}      = [];
     $self->{pieces_sha1_hashes}    = $self->{dt_obj}->get_pieces_array();
-    $self->{standard_piece_length} =
-      $self->{dt_obj}->get_standard_piece_length();
+    $self->{standard_piece_length} = $self->{dt_obj}->get_standard_piece_length();
+    $self->{final_partial_piece_length} = $self->{dt_obj}->get_final_partial_piece_length();
+    $self->{total_piece_count} = $self->{dt_obj}->get_total_piece_count();
+
+#    for my $file (map { $_->{path} } @{$self->{files}}) {
+#        my @path = File::Spec->splitdir($file);
+#        pop @path;
+#        for my $index (0..$#path) {
+#            my $path = File::Spec->join(@path[0..$index]);
+#            if(not -d $path) {
+#                mkdir $path || die $!;
+#            }
+#        }
+#    }
 
     return $self;
 }
@@ -47,14 +60,19 @@ sub get_remaining_blocks_list_for_piece {
 
     if ( ( first_index { $piece == $_ } @{ $self->{completed_pieces} } ) >= 0 )
     {
+        #print STDERR "PL (none)\n";
         return [];
     }
 
-    if ( -s $self->{files}->[0]->{path} . '.' . $piece ) {
-        return [ { offset => 9, size => 1 } ];
+    my $piece_length = ($piece != ($self->{total_piece_count}-1)) ? $self->{standard_piece_length} : $self->{final_partial_piece_length};
+
+    #print STDERR "PL ($piece_length)\n";
+
+    if ( my $size = -s $piece . '.piece' ) {
+        return [ { offset => $size, size => $piece_length-$size } ];
     }
 
-    return [ { offset => 0, size => 10 } ];
+    return [ { offset => 0, size => $piece_length } ];
 }
 
 sub write_block {
@@ -64,16 +82,21 @@ sub write_block {
       first_index { $_ == $args{piece} } @{ $self->{remaining_pieces} };
     return unless $piece_index >= 0;
 
-    my $piece_file = $self->{files}->[0]->{path} . '.' . $piece_index;
+    my $piece_file = $piece_index . '.piece';
 
+    # write the data to a 'piece' file
+    {
     my $fh = IO::File->new( $piece_file, 'a' ) || croak($!);
     binmode $fh;
     $fh->seek( $args{offset}, 0 );
     print {$fh} ${ $args{data_ref} } || croak($!);
     $fh->close();
+    }
+
+    my $completed_piece_length = $piece_index == $self->{total_piece_count}-1 ? $self->{final_partial_piece_length} : $self->{standard_piece_length};
 
     if (
-        ( -s $piece_file == $self->{files}->[0]->{length} )
+        ( -s $piece_file == $completed_piece_length )
         && ( $self->{pieces_sha1_hashes}->[$piece_index] eq
             sha1( read_file( $piece_file, binmode => ':raw' ) ) )
         && $self->{remaining_pieces}->[$piece_index] == $args{piece}
@@ -82,24 +105,26 @@ sub write_block {
         push @{ $self->{completed_pieces} },
           splice @{ $self->{remaining_pieces} }, $piece_index, 1;
 
-        $self->_are_we_done_yet();
+        $self->_are_we_done_yet($piece_index);
     }
 
     return 1;
 }
 
 sub _are_we_done_yet {
-    my ($self) = @_;
+    my ($self, $piece_index) = @_;
 
     return if @{ $self->{remaining_pieces} };
 
-    my $final_file = $self->{files}->[0]->{path};
+    print STDERR "We are done\n";
+
+    my $final_file = $self->{files}->[$piece_index]->{path};
 
     my $fh = IO::File->new( $final_file, 'w' ) || croak $!;
     binmode($fh);
 
     for my $piece ( sort { $a <=> $b } @{ $self->{completed_pieces} } ) {
-        my $piece_file = $self->{files}->[0]->{path} . '.' . $piece;
+        my $piece_file = $piece_index . '.piece';
         print {$fh} read_file( $piece_file, binmode => ':raw' ) || croak $!;
         unlink $piece_file;
     }
