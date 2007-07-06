@@ -264,6 +264,26 @@ MORE_THAN_ONE_PIECE_AND_FILE: {
         label            => "$label, after third write",
     );
 
+    {
+        my $data_from_file =
+          read_file( File::Spec->join( $file_name, 'one.txt' ) );
+        is(
+            $data_from_file,
+            substr( $data, 0, 8 ),
+            "$label, everything wrote appropriately"
+        );
+    }
+
+    {
+        my $data_from_file =
+          read_file( File::Spec->join( $file_name, 'two.txt' ) );
+        is(
+            $data_from_file,
+            substr( $data, 8, 6 ),
+            "$label, everything wrote appropriately"
+        );
+    }
+
     remove \1, '*.piece';
     remove \1, '*.delete*';
 }
@@ -353,37 +373,36 @@ PICK_UP_ON_A_PARTIAL_DOWNLOAD: {
         label => "$label, first write",
     );
 
-=pod
-
-    my $second_block = substr( $data, 10, 4 );
+    my $second_block = substr( $data, 40, 10 );
     ok(
-        $dl->write_block( piece => 1, offset => 0, data_ref => \$second_block ),
+        $dl->write_block( piece => 4, offset => 0, data_ref => \$second_block ),
         "$label, write the second block"
     );
 
     check_status_of_pieces(
         $dl,
-        remaining        => [0],
-        completed        => [1],
-        remaining_blocks => { 0 => [ { offset => 4, size => 6 } ], 1 => [], },
+        remaining        => [3],
+        completed        => [ 0, 1, 2, 4 ],
+        remaining_blocks => { 3 => [ { offset => 0, size => 10 } ], },
         label            => "$label, second write",
     );
 
-    my $third_block = substr( $data, 4, 6 );
+    my $third_block = substr( $data, 30, 10 );
     ok(
-        $dl->write_block( piece => 0, offset => 4, data_ref => \$third_block ),
+        $dl->write_block( piece => 3, offset => 0, data_ref => \$third_block ),
         "$label, write the third block"
     );
 
     check_status_of_pieces(
         $dl,
         remaining        => [],
-        completed        => [ 1, 0 ],
-        remaining_blocks => { 0 => [], 1 => [], },
+        completed        => [ 0, 1, 2, 3, 4 ],
+        remaining_blocks => {},
         label            => "$label, after third write",
     );
 
-=cut
+    my $data_from_file = read_file($file_name);
+    is( $data_from_file, $data, "$label, everything wrote appropriately" );
 
     remove \1, '*.piece';
     remove \1, '*.delete*';
