@@ -10,8 +10,8 @@ use File::Remove qw(remove);
 
 use_ok('Net::BitTorrent::File::Downloaded');
 
-    remove '*.piece';
-    remove '*.delete*';
+remove '*.piece';
+remove '*.delete*';
 
 sub setup_new_dl_object {
     my ($mocks) = @_;
@@ -86,7 +86,6 @@ ONE_PIECE_IN_ONE_BLOCK: {
         label => "$label, after write",
     );
 
-    #unlink $file_name;
     remove '*.piece';
     remove '*.delete*';
 }
@@ -156,12 +155,11 @@ ONE_PIECE_WITH_TWO_BLOCKS: {
 #    my $data_from_file = read_file($file_name);
 #    is( $data_from_file, $data . $more_data, "$label, everything wrote appropriately" );
 
-#    unlink $file_name;
     remove '*.piece';
     remove '*.delete*';
 }
 
- MORE_THAN_ONE_PIECE: {
+MORE_THAN_ONE_PIECE: {
     my $label = 'more than one piece';
     my $file_name = random_string('ccccc') . '.delete';
 
@@ -220,11 +218,10 @@ ONE_PIECE_WITH_TWO_BLOCKS: {
         label => "$label, second write",
     );
 
-    my $third_block= substr($data, 4, 6);
+    my $third_block = substr($data, 4, 6);
     ok( $dl->write_block( piece => 0, offset => 4, data_ref => \$third_block ),
         "$label, write the third block" );
 
-=pod
     check_status_of_pieces(
         $dl,
         remaining        => [ ],
@@ -232,10 +229,7 @@ ONE_PIECE_WITH_TWO_BLOCKS: {
         remaining_blocks => { 0 => [ ], 1 => [ ], },
         label => "$label, after third write",
     );
-
-=cut
 }
-
 
 # PICK_UP_ON_PARTIAL_DOWNLOAD: {
 
