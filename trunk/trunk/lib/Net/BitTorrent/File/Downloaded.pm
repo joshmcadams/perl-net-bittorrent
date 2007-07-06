@@ -60,13 +60,10 @@ sub get_remaining_blocks_list_for_piece {
 
     if ( ( first_index { $piece == $_ } @{ $self->{completed_pieces} } ) >= 0 )
     {
-        #print STDERR "PL (none)\n";
         return [];
     }
 
     my $piece_length = ($piece != ($self->{total_piece_count}-1)) ? $self->{standard_piece_length} : $self->{final_partial_piece_length};
-
-    #print STDERR "PL ($piece_length)\n";
 
     if ( my $size = -s $piece . '.piece' ) {
         return [ { offset => $size, size => $piece_length-$size } ];
@@ -116,15 +113,21 @@ sub _are_we_done_yet {
 
     return if @{ $self->{remaining_pieces} };
 
-    print STDERR "We are done\n";
-
     my $final_file = $self->{files}->[$piece_index]->{path};
 
-    my $fh = IO::File->new( $final_file, 'w' ) || croak $!;
+    my @dirs = File::Spec->splitdir($final_file);
+    pop @dirs;
+    my $long_dir;
+    for my $dir (@dirs) {
+        $long_dir = defined $long_dir ? File::Spec->join($long_dir, $dir) : $dir;
+        mkdir $long_dir;
+    }
+
+    my $fh = IO::File->new( $final_file, O_RDWR|O_CREAT ) || croak $!;
     binmode($fh);
 
     for my $piece ( sort { $a <=> $b } @{ $self->{completed_pieces} } ) {
-        my $piece_file = $piece_index . '.piece';
+        my $piece_file = $piece. '.piece';
         print {$fh} read_file( $piece_file, binmode => ':raw' ) || croak $!;
         unlink $piece_file;
     }
