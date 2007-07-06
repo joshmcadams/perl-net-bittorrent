@@ -130,32 +130,76 @@ sub write_block {
     return 1;
 }
 
-sub _are_we_done_yet {
-    my ( $self, $piece_index ) = @_;
+sub _build_out_directories {
+    my ($file_name) = @_;
 
-    return if @{ $self->{remaining_pieces} };
-
-    my $final_file = $self->{files}->[0]->{path};
-
-    my @dirs = File::Spec->splitdir($final_file);
+    my @dirs = File::Spec->splitdir($file_name);
     pop @dirs;
     my $long_dir;
     for my $dir (@dirs) {
         $long_dir =
           defined $long_dir ? File::Spec->join( $long_dir, $dir ) : $dir;
-        mkdir $long_dir;
+        if ( !-d $long_dir ) {
+            mkdir $long_dir or die $!;
+        }
     }
 
-    my $fh = IO::File->new( $final_file, O_RDWR | O_CREAT ) || croak $!;
+    return 1;
+}
+
+sub _write_pieces_to_file {
+    my ( $file, $pieces ) = @_;
+
+    my $current_size = 0;
+    my $target_size  = $file->{length};
+
+    my $fh = IO::File->new( $file->{path}, O_RDWR | O_CREAT ) || croak $!;
     binmode($fh);
 
-    for my $piece ( sort { $a <=> $b } @{ $self->{completed_pieces} } ) {
-        my $piece_file = $piece . '.piece';
-        print {$fh} read_file( $piece_file, binmode => ':raw' ) || croak $!;
-        unlink $piece_file;
+    my $counter = 1;
+    while ( $current_size < $target_size ) {
+        my $piece             = shift @{$pieces};
+        my $piece_file        = $piece->{piece} . '.piece';
+        my $needed_byte_count = $target_size - $current_size;
+
+        if ( $piece->{size} <= $needed_byte_count ) {
+            print {$fh} read_file( $piece_file, binmode => ':raw' ) || croak $!;
+            unlink $piece_file;
+            $current_size += $piece->{size};
+        }
+        else {
+            my $data = read_file( $piece_file, binmode => ':raw' );
+            print {$fh} substr( $data, 0, $needed_byte_count )
+              || croak $!;
+            my $fh = IO::File->new( $piece_file, 'w' ) or die $!;
+            binmode $fh;
+            print {$fh} substr( $data, $needed_byte_count );
+            $fh->close();
+            $current_size += $needed_byte_count;
+            $piece->{size} = -s $piece_file;
+            unshift @{$pieces}, $piece if $current_size;
+        }
+
+        last if $current_size >= $target_size;
     }
 
     $fh->close();
+
+    return 1;
+}
+
+sub _are_we_done_yet {
+    my ( $self, $piece_index ) = @_;
+
+    return if @{ $self->{remaining_pieces} };
+
+    my @pieces = map { { piece => $_, size => -s $_ . '.piece' } }
+      sort { $a <=> $b } @{ $self->{completed_pieces} };
+
+    for my $file ( @{ $self->{files} } ) {
+        _build_out_directories( $file->{path} );
+        _write_pieces_to_file( $file, \@pieces );
+    }
 }
 
 1;
