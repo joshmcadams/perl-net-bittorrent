@@ -29,20 +29,22 @@ sub _check_arguments {
       [ 0 .. $self->{dt_obj}->get_total_piece_count() - 1 ];
     $self->{completed_pieces}      = [];
     $self->{pieces_sha1_hashes}    = $self->{dt_obj}->get_pieces_array();
-    $self->{standard_piece_length} = $self->{dt_obj}->get_standard_piece_length();
-    $self->{final_partial_piece_length} = $self->{dt_obj}->get_final_partial_piece_length();
+    $self->{standard_piece_length} =
+      $self->{dt_obj}->get_standard_piece_length();
+    $self->{final_partial_piece_length} =
+      $self->{dt_obj}->get_final_partial_piece_length();
     $self->{total_piece_count} = $self->{dt_obj}->get_total_piece_count();
 
-#    for my $file (map { $_->{path} } @{$self->{files}}) {
-#        my @path = File::Spec->splitdir($file);
-#        pop @path;
-#        for my $index (0..$#path) {
-#            my $path = File::Spec->join(@path[0..$index]);
-#            if(not -d $path) {
-#                mkdir $path || die $!;
-#            }
-#        }
-#    }
+    #    for my $file (map { $_->{path} } @{$self->{files}}) {
+    #        my @path = File::Spec->splitdir($file);
+    #        pop @path;
+    #        for my $index (0..$#path) {
+    #            my $path = File::Spec->join(@path[0..$index]);
+    #            if(not -d $path) {
+    #                mkdir $path || die $!;
+    #            }
+    #        }
+    #    }
 
     return $self;
 }
@@ -63,10 +65,13 @@ sub get_remaining_blocks_list_for_piece {
         return [];
     }
 
-    my $piece_length = ($piece != ($self->{total_piece_count}-1)) ? $self->{standard_piece_length} : $self->{final_partial_piece_length};
+    my $piece_length =
+      ( $piece != ( $self->{total_piece_count} - 1 ) )
+      ? $self->{standard_piece_length}
+      : $self->{final_partial_piece_length};
 
     if ( my $size = -s $piece . '.piece' ) {
-        return [ { offset => $size, size => $piece_length-$size } ];
+        return [ { offset => $size, size => $piece_length - $size } ];
     }
 
     return [ { offset => 0, size => $piece_length } ];
@@ -83,14 +88,17 @@ sub write_block {
 
     # write the data to a 'piece' file
     {
-    my $fh = IO::File->new( $piece_file, 'a' ) || croak($!);
-    binmode $fh;
-    $fh->seek( $args{offset}, 0 );
-    print {$fh} ${ $args{data_ref} } || croak($!);
-    $fh->close();
+        my $fh = IO::File->new( $piece_file, 'a' ) || croak($!);
+        binmode $fh;
+        $fh->seek( $args{offset}, 0 );
+        print {$fh} ${ $args{data_ref} } || croak($!);
+        $fh->close();
     }
 
-    my $completed_piece_length = $piece_index == $self->{total_piece_count}-1 ? $self->{final_partial_piece_length} : $self->{standard_piece_length};
+    my $completed_piece_length =
+        $piece_index == $self->{total_piece_count} - 1
+      ? $self->{final_partial_piece_length}
+      : $self->{standard_piece_length};
 
     if (
         ( -s $piece_file == $completed_piece_length )
@@ -109,7 +117,7 @@ sub write_block {
 }
 
 sub _are_we_done_yet {
-    my ($self, $piece_index) = @_;
+    my ( $self, $piece_index ) = @_;
 
     return if @{ $self->{remaining_pieces} };
 
@@ -119,15 +127,16 @@ sub _are_we_done_yet {
     pop @dirs;
     my $long_dir;
     for my $dir (@dirs) {
-        $long_dir = defined $long_dir ? File::Spec->join($long_dir, $dir) : $dir;
+        $long_dir =
+          defined $long_dir ? File::Spec->join( $long_dir, $dir ) : $dir;
         mkdir $long_dir;
     }
 
-    my $fh = IO::File->new( $final_file, O_RDWR|O_CREAT ) || croak $!;
+    my $fh = IO::File->new( $final_file, O_RDWR | O_CREAT ) || croak $!;
     binmode($fh);
 
     for my $piece ( sort { $a <=> $b } @{ $self->{completed_pieces} } ) {
-        my $piece_file = $piece. '.piece';
+        my $piece_file = $piece . '.piece';
         print {$fh} read_file( $piece_file, binmode => ':raw' ) || croak $!;
         unlink $piece_file;
     }
