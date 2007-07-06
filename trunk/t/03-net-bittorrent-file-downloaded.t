@@ -10,8 +10,8 @@ use File::Remove qw(remove);
 
 use_ok('Net::BitTorrent::File::Downloaded');
 
-remove '*.piece';
-remove '*.delete*';
+remove \1, '*.piece';
+remove \1, '*.delete*';
 
 sub setup_new_dl_object {
     my ($mocks) = @_;
@@ -252,6 +252,9 @@ MORE_THAN_ONE_PIECE: {
         remaining_blocks => { 0 => [], 1 => [], },
         label            => "$label, after third write",
     );
+
+    remove \1, '*.piece';
+    remove \1, '*.delete*';
 }
 
 # PICK_UP_ON_PARTIAL_DOWNLOAD: {
