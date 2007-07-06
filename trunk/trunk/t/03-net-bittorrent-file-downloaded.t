@@ -27,20 +27,20 @@ sub setup_new_dl_object {
 sub check_status_of_pieces {
     my ( $dl, %args ) = @_;
     is_deeply( $dl->get_remaining_piece_list,
-        $args{remaining}, ($args{label} || '') . ' - remaining piece list' );
+        $args{remaining}, ( $args{label} || '' ) . ' - remaining piece list' );
     is_deeply( $dl->get_completed_piece_list,
-        $args{completed}, ($args{label} || '') . ' - completed piece list' );
+        $args{completed}, ( $args{label} || '' ) . ' - completed piece list' );
     for my $piece ( keys %{ $args{remaining_blocks} } ) {
         is_deeply(
             $dl->get_remaining_blocks_list_for_piece($piece),
             $args{remaining_blocks}{$piece},
-             ($args{label} || '') . ' - remaining blocks for piece ' . $piece
+            ( $args{label} || '' ) . ' - remaining blocks for piece ' . $piece
         );
     }
 }
 
 ONE_PIECE_IN_ONE_BLOCK: {
-    my $label = 'one piece in one block';
+    my $label     = 'one piece in one block';
     my $file_name = random_string('ccccc') . '.delete';
     my $file_size = 10;
 
@@ -69,21 +69,21 @@ ONE_PIECE_IN_ONE_BLOCK: {
         remaining        => [0],
         completed        => [],
         remaining_blocks => { 0 => [ { offset => 0, size => 10 } ], },
-        label => "$label, pre-write",
+        label            => "$label, pre-write",
     );
 
     ok( $dl->write_block( piece => 0, offset => 0, data_ref => \$data ),
         "$label, first write" );
 
-#    my $data_from_file = read_file($file_name);
-#    is( $data_from_file, $data, "$label, everything wrote appropriately" );
+    #    my $data_from_file = read_file($file_name);
+    #    is( $data_from_file, $data, "$label, everything wrote appropriately" );
 
     check_status_of_pieces(
         $dl,
         remaining        => [],
         completed        => [0],
         remaining_blocks => { 0 => [] },
-        label => "$label, after write",
+        label            => "$label, after write",
     );
 
     remove '*.piece';
@@ -91,7 +91,7 @@ ONE_PIECE_IN_ONE_BLOCK: {
 }
 
 ONE_PIECE_WITH_TWO_BLOCKS: {
-    my $label = 'one piece with two blocks';
+    my $label     = 'one piece with two blocks';
     my $file_name = random_string('ccccc') . '.delete';
     my $file_size = 10;
 
@@ -121,7 +121,7 @@ ONE_PIECE_WITH_TWO_BLOCKS: {
         remaining        => [0],
         completed        => [],
         remaining_blocks => { 0 => [ { offset => 0, size => 10 } ], },
-        label => "$label, pre-write",
+        label            => "$label, pre-write",
     );
 
     ok( $dl->write_block( piece => 0, offset => 0, data_ref => \$data ),
@@ -132,7 +132,7 @@ ONE_PIECE_WITH_TWO_BLOCKS: {
         remaining        => [0],
         completed        => [],
         remaining_blocks => { 0 => [ { offset => 9, size => 1 } ], },
-        label => "$label, after first write",
+        label            => "$label, after first write",
     );
 
     ok(
@@ -149,7 +149,7 @@ ONE_PIECE_WITH_TWO_BLOCKS: {
         remaining        => [],
         completed        => [0],
         remaining_blocks => { 0 => [], },
-        label => "$label, after the second write",
+        label            => "$label, after the second write",
     );
 
 #    my $data_from_file = read_file($file_name);
@@ -160,74 +160,97 @@ ONE_PIECE_WITH_TWO_BLOCKS: {
 }
 
 MORE_THAN_ONE_PIECE: {
-    my $label = 'more than one piece';
+    my $label     = 'more than one piece';
     my $file_name = random_string('ccccc') . '.delete';
 
-    my $data = random_string( '.'x14 );
+    my $data = random_string( '.' x 14 );
 
     my %mocks = (
-        'get_torrent_file_name'          => sub { $file_name . '.torrent' },
-        'multiple_files_exist'           => sub { 1 },
-        'get_suggested_file_name'        => sub { $file_name },
-        'get_standard_piece_length'      => sub { 10 },
-        'get_total_piece_count'          => sub { 2 },
-        'get_total_download_size'        => sub { do{ use bytes; length($data) } },
+        'get_torrent_file_name'     => sub { $file_name . '.torrent' },
+        'multiple_files_exist'      => sub { 1 },
+        'get_suggested_file_name'   => sub { $file_name },
+        'get_standard_piece_length' => sub { 10 },
+        'get_total_piece_count'     => sub { 2 },
+        'get_total_download_size'   => sub {
+            do { use bytes; length($data) }
+        },
         'get_whole_piece_count'          => sub { 1 },
         'final_partial_piece_exists'     => sub { 1 },
         'get_final_partial_piece_length' => sub { 4 },
         'get_tracker' => sub { 'http://my.tracker:6969/announce' },
-        'get_files'   =>
-          sub { [ 
-            { 'length' => 8, 'path' => File::Spec->join($file_name, 'one.txt'), }, 
-            { 'length' => 6, 'path' => File::Spec->join($file_name, 'two.txt'), }, 
-        ] },
-        'get_pieces_array' => sub { [ sha1( substr($data, 0, 10) ), sha1( substr($data, 10, 4)) ] },
+        'get_files'   => sub {
+            [
+                {
+                    'length' => 8,
+                    'path'   => File::Spec->join( $file_name, 'one.txt' ),
+                },
+                {
+                    'length' => 6,
+                    'path'   => File::Spec->join( $file_name, 'two.txt' ),
+                },
+            ];
+        },
+        'get_pieces_array' => sub {
+            [ sha1( substr( $data, 0, 10 ) ), sha1( substr( $data, 10, 4 ) ) ];
+        },
     );
 
     my $dl = setup_new_dl_object( \%mocks );
 
     check_status_of_pieces(
         $dl,
-        remaining        => [0, 1],
+        remaining        => [ 0, 1 ],
         completed        => [],
-        remaining_blocks => { 0 => [ { offset => 0, size => 10 } ], 1 => [ {offset => 0, size => 4}], },
+        remaining_blocks => {
+            0 => [ { offset => 0, size => 10 } ],
+            1 => [ { offset => 0, size => 4 } ],
+        },
         label => "$label, pre-write",
     );
 
-    my $first_block= substr($data, 0, 4);
-    ok( $dl->write_block( piece => 0, offset => 0, data_ref => \$first_block ),
-        "$label, write the first block" );
+    my $first_block = substr( $data, 0, 4 );
+    ok(
+        $dl->write_block( piece => 0, offset => 0, data_ref => \$first_block ),
+        "$label, write the first block"
+    );
 
     check_status_of_pieces(
         $dl,
-        remaining        => [0, 1],
+        remaining        => [ 0, 1 ],
         completed        => [],
-        remaining_blocks => { 0 => [ { offset => 4, size => 6 } ], 1 => [ {offset => 0, size => 4}], },
+        remaining_blocks => {
+            0 => [ { offset => 4, size => 6 } ],
+            1 => [ { offset => 0, size => 4 } ],
+        },
         label => "$label, first write",
     );
 
-    my $second_block= substr($data, 10, 4);
-    ok( $dl->write_block( piece => 1, offset => 0, data_ref => \$second_block ),
-        "$label, write the second block" );
+    my $second_block = substr( $data, 10, 4 );
+    ok(
+        $dl->write_block( piece => 1, offset => 0, data_ref => \$second_block ),
+        "$label, write the second block"
+    );
 
     check_status_of_pieces(
         $dl,
         remaining        => [0],
         completed        => [1],
-        remaining_blocks => { 0 => [ { offset => 4, size => 6 } ], 1 => [ ], },
-        label => "$label, second write",
+        remaining_blocks => { 0 => [ { offset => 4, size => 6 } ], 1 => [], },
+        label            => "$label, second write",
     );
 
-    my $third_block = substr($data, 4, 6);
-    ok( $dl->write_block( piece => 0, offset => 4, data_ref => \$third_block ),
-        "$label, write the third block" );
+    my $third_block = substr( $data, 4, 6 );
+    ok(
+        $dl->write_block( piece => 0, offset => 4, data_ref => \$third_block ),
+        "$label, write the third block"
+    );
 
     check_status_of_pieces(
         $dl,
-        remaining        => [ ],
-        completed        => [1, 0],
-        remaining_blocks => { 0 => [ ], 1 => [ ], },
-        label => "$label, after third write",
+        remaining        => [],
+        completed        => [ 1, 0 ],
+        remaining_blocks => { 0 => [], 1 => [], },
+        label            => "$label, after third write",
     );
 }
 
