@@ -1,5 +1,3 @@
-- interface with the .torrent file
-- interface with the physical file on the filesystem
 - interface with the tracker
 - interface with peers
 - pluggable algorithm
