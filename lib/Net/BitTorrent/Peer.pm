@@ -2,7 +2,7 @@ package Net::BitTorrent::Peer;
 
 use warnings;
 use strict;
-use Net::BitTorrent::PeerPacket qw(bt_parse_packet);
+use Net::BitTorrent::PeerPacket qw(:all);
 use Carp qw(croak cluck);
 
 sub new {
@@ -29,6 +29,7 @@ sub _set_defaults {
     my ($self) = @_;
 
     $self->{we_are_interested} = 0;
+    $self->{has}               = [];
     $self->{communicator}->set_callback(
         sub {
             $self->process_message_from_peer(@_);
@@ -52,7 +53,7 @@ sub _initiate_communication {
 }
 
 sub has {
-    return [];
+    return shift->{has};
 }
 
 sub choked {
@@ -76,9 +77,14 @@ sub show_interest {
 sub process_message_from_peer {
     my ( $self, $message ) = @_;
 
-    my $parsed_packet = eval { bt_parse_packet($message); };
+    my $parsed_packet = bt_parse_packet( \$message );
 
-    if ($@) {    # either an unparsable packet or the handshake
+    if ( $parsed_packet->{bt_code} == BT_BITFIELD ) {
+        my @pieces =
+          split( //, unpack( "b*", ${ $parsed_packet->{bitfield_ref} } ) );
+        for my $index ( 0 .. $#pieces ) {
+            push @{ $self->{has} }, $index if $pieces[$index] > 0;
+        }
     }
 }
 

@@ -2,7 +2,8 @@ use warnings;
 use strict;
 use Test::More qw(no_plan);
 use Test::MockObject;
-use Net::BitTorrent::PeerPacket;
+use Net::BitTorrent::PeerPacket qw(:all);
+use Bit::Vector::Minimal;
 
 use_ok('Net::BitTorrent::Peer');
 
@@ -26,33 +27,49 @@ my $peer = Net::BitTorrent::Peer->new(
     communicator => $comm,
 );
 
+isa_ok( $peer, 'Net::BitTorrent::Peer' );
+
+# expect that a handshake, and only a handshake, was sent
 is(
     shift @{ $comm->{messages} },
-    pack( 'c/a* a8 a20 a20',
-        'BitTorrent protocol',
-        '', $info_hash, $client_id, ),
+    bt_build_packet(
+        bt_code   => BT_HANDSHAKE,
+        info_hash => $info_hash,
+        peer_id   => $client_id
+    ),
     'got a handshake'
 );
 
 is( shift @{ $comm->{messages} }, undef, 'only a single message' );
 
-my $handshake_response =
-  pack( 'c/a* a8 a20 a20', 'BitTorrent protocol', '', $info_hash, $peer_id, );
-$comm->callback($handshake_response);
+# be a nice peer and respond with our own handshake
+$comm->callback(
+    bt_build_packet(
+        bt_code   => BT_HANDSHAKE,
+        info_hash => $info_hash,
+        peer_id   => $peer_id
+    )
+);
 
-isa_ok( $peer, 'Net::BitTorrent::Peer' );
-
-my $possibilities = $peer->has();
-
-is_deeply( $possibilities, [], 'peer has no pieces' );
-
-is( $peer->choked(), 1, 'peer is initially choked' );
-
+# check initial settings
+is_deeply( $peer->has(), [], 'peer has no pieces' );
+is( $peer->choked(),     1, 'peer is initially choked' );
 is( $peer->interested(), 0, 'we are initially not interested' );
 
-$peer->show_interest();
+# send a bitfield to let the peer know what we've got
+my $bitfield = pack( "b*", '11100000' );
+$comm->callback(
+    bt_build_packet( bt_code => BT_BITFIELD, bitfield_ref => \$bitfield ) );
 
-is( $peer->interested(), 1, 'we are interested now' );
+is_deeply( $peer->has(), [ 0, 1, 2 ], 'read bitfield correctly' );
 
+############
+
+#print split(//, unpack("b*", $bitfield)), "\n";
+
+#is($bitfield, $vec, 'bits twiddled');
+
+#$peer->show_interest();
+#is( $peer->interested(), 1, 'we are interested now' );
 #is($peer->choked(), 0, 'now we are not choked');
 
