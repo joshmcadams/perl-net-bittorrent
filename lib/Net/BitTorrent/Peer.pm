@@ -4,6 +4,7 @@ use warnings;
 use strict;
 use Net::BitTorrent::PeerPacket qw(:all);
 use Carp qw(croak cluck);
+use Data::Dumper;
 
 sub new {
     my ( $class, %args ) = @_;
@@ -43,9 +44,10 @@ sub _initiate_communication {
     my ($self) = @_;
 
     $self->{communicator}->send_message(
-        pack( 'c/a* a8 a20 a20',
-            'BitTorrent protocol', '',
-            $self->{info_hash},    $self->{client_id},
+        bt_build_packet(
+            bt_code   => BT_HANDSHAKE,
+            info_hash => $self->{info_hash},
+            peer_id   => $self->{client_id},
         )
     );
 
@@ -79,7 +81,17 @@ sub process_message_from_peer {
 
     my $parsed_packet = bt_parse_packet( \$message );
 
-    if ( $parsed_packet->{bt_code} == BT_BITFIELD ) {
+    if ( $parsed_packet->{bt_code} == BT_HANDSHAKE ) {
+
+        #        print Dumper $parsed_packet;
+
+        croak 'already participated in handshake' if $self->{shook_hands}++;
+        croak 'unexpected info hash received'
+          unless $parsed_packet->{info_hash} eq $self->{info_hash};
+        croak 'unexpected peer id received'
+          unless $parsed_packet->{peer_id} eq $self->{peer_id};
+    }
+    elsif ( $parsed_packet->{bt_code} == BT_BITFIELD ) {
         my @pieces =
           split( //, unpack( "b*", ${ $parsed_packet->{bitfield_ref} } ) );
         for my $index ( 0 .. $#pieces ) {
