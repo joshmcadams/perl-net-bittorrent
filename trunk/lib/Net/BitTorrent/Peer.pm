@@ -142,21 +142,52 @@ sub show_disinterest {
 }
 
 sub request {
-    my ( $self, $piece_index, $block_offset, $block_size ) = @_;
+    my ( $self, %args ) = @_;
+
+    push @{ $self->{requested_by_client} }, \%args;
 
     $self->{communicator}->send_message(
         bt_build_packet(
-            bt_code      => BT_REQUEST,
-            piece_index  => $piece_index,
-            block_offset => $block_offset,
-            block_size   => $block_size
+            bt_code => BT_REQUEST,
+            %args
         )
     );
 }
 
-sub requested {
-    my ($self) = @_;
-    return $self->{requested};
+sub requested_by_peer {
+    return shift->{requested_by_peer} || [];
+}
+
+sub requested_by_client {
+    return shift->{requested_by_client} || [];
+}
+
+sub cancel {
+    my ( $self, %args ) = @_;
+
+    my $index = 0;
+    for my $request ( @{ $self->{requested_by_client} || [] } ) {
+        if ( $args{piece_index} eq $request->{piece_index} ) {
+            if ( $args{block_offset} eq $request->{block_offset} ) {
+                if ( $args{block_size} eq $request->{block_size} ) {
+
+                    $self->{communicator}->send_message(
+                        bt_build_packet(
+                            bt_code => BT_CANCEL,
+                            %args
+                        )
+                    );
+
+                    splice @{ $self->{requested_by_client} }, $index, 1;
+
+                    return;
+                }
+            }
+        }
+        ++$index;
+    }
+
+    croak 'unable to find request matching piece';
 }
 
 sub piece {
@@ -166,7 +197,7 @@ sub piece {
     { use bytes; $size = length( ${$data_ref} ); }
 
     my $index = 0;
-    for my $request ( @{ $self->{requested} || [] } ) {
+    for my $request ( @{ $self->{requested_by_peer} || [] } ) {
         if ( $piece_index eq $request->{piece_index} ) {
             if ( $block_offset eq $request->{block_offset} ) {
                 if ( $size eq $request->{block_size} ) {
@@ -180,7 +211,7 @@ sub piece {
                         )
                     );
 
-                    splice @{ $self->{requested} }, $index, 1;
+                    splice @{ $self->{requested_by_peer} }, $index, 1;
 
                     return;
                 }
@@ -240,7 +271,7 @@ sub process_message_from_peer {
     }
     elsif ( $parsed_packet->{bt_code} == BT_REQUEST ) {
         delete $parsed_packet->{bt_code};
-        push @{ $self->{requested} }, $parsed_packet;
+        push @{ $self->{requested_by_peer} }, $parsed_packet;
     }
     elsif ( $parsed_packet->{bt_code} == BT_PIECE ) {
     }
