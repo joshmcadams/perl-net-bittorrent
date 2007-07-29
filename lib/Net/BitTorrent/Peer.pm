@@ -274,6 +274,46 @@ sub process_message_from_peer {
         push @{ $self->{requested_by_peer} }, $parsed_packet;
     }
     elsif ( $parsed_packet->{bt_code} == BT_PIECE ) {
+        my $index      = 0;
+        my $block_size = 0;
+        { use bytes; $block_size = length( ${ $parsed_packet->{data_ref} } ); }
+        for my $request ( @{ $self->{requested_by_client} || [] } ) {
+            if ( $parsed_packet->{piece_index} eq $request->{piece_index} ) {
+                if (
+                    $parsed_packet->{block_offset} eq $request->{block_offset} )
+                {
+                    if ( $block_size eq $request->{block_size} ) {
+                        splice @{ $self->{requested_by_client} }, $index, 1;
+                        return;
+                    }
+                }
+            }
+            ++$index;
+        }
+
+        croak 'unable to find request matching piece';
+
+    }
+    elsif ( $parsed_packet->{bt_code} == BT_CANCEL ) {
+        my $index = 0;
+        for my $request ( @{ $self->{requested_by_peer} || [] } ) {
+            if ( $parsed_packet->{piece_index} eq $request->{piece_index} ) {
+                if (
+                    $parsed_packet->{block_offset} eq $request->{block_offset} )
+                {
+                    if (
+                        $parsed_packet->{block_size} eq $request->{block_size} )
+                    {
+                        splice @{ $self->{requested_by_peer} }, $index, 1;
+                        return;
+                    }
+                }
+            }
+            ++$index;
+        }
+
+        croak 'unable to find request matching cancel';
+
     }
 
     return;

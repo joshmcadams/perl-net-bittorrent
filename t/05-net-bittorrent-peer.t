@@ -358,6 +358,57 @@ sub piece : Tests {
     is_deeply( $self->{peer}->requested_by_peer, [], 'cleared request queue' );
 }
 
+sub incoming_piece : Tests {
+    my ($self) = @_;
+
+    eval { $self->send_handshake_to_peer->next_message_in_queue; };
+    ok( not($@), $@ || 'shaking hands' );
+
+    my $piece_index  = 1;
+    my $block_offset = 0;
+    my $block_size   = 0;
+    my $data         = '0123456789';
+    { use bytes; $block_size = length($data); }
+
+    $self->{peer}->request(
+        piece_index  => $piece_index,
+        block_offset => $block_offset,
+        block_size   => $block_size
+    );
+
+    is_deeply(
+        $self->{peer}->requested_by_client,
+        [
+            {
+                piece_index  => $piece_index,
+                block_offset => $block_offset,
+                block_size   => $block_size
+            }
+        ],
+        'cleared request queue'
+    );
+    is_deeply(
+        $self->next_message_in_queue,
+        bt_build_packet(
+            bt_code      => BT_REQUEST,
+            piece_index  => $piece_index,
+            block_offset => $block_offset,
+            block_size   => $block_size,
+        ),
+        'sent piece successfully'
+    );
+
+    $self->send_to_peer(
+        bt_code      => BT_PIECE,
+        piece_index  => $piece_index,
+        block_offset => $block_offset,
+        data_ref     => \$data
+    );
+
+    is_deeply( $self->{peer}->requested_by_client, [],
+        'cleared request queue' );
+}
+
 sub unrequested_piece : Tests {
     my ($self) = @_;
 
@@ -447,6 +498,27 @@ sub cancel : Tests {
         bt_build_packet( bt_code => BT_CANCEL, %request ),
         'cancel message sent'
     );
+}
+
+sub incoming_cancel : Tests {
+    my ($self) = @_;
+
+    eval { $self->send_handshake_to_peer->next_message_in_queue; };
+    ok( not($@), $@ || 'shaking hands' );
+
+    my %request = ( piece_index => 0, block_offset => 100, block_size => 10 );
+
+    $self->send_to_peer( bt_code => BT_REQUEST, %request );
+
+    is_deeply(
+        $self->{peer}->requested_by_peer,
+        [ \%request ],
+        'canceled the request'
+    );
+
+    $self->send_to_peer( bt_code => BT_CANCEL, %request );
+
+    is_deeply( $self->{peer}->requested_by_peer, [], 'canceled the request' );
 }
 
 sub next_message_in_queue {
