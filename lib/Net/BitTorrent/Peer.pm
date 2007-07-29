@@ -144,7 +144,9 @@ sub show_disinterest {
 sub request {
     my ( $self, %args ) = @_;
 
-    push @{ $self->{requested_by_client} }, \%args;
+    push @{ $self->{requested_by_client} }, {%args};
+
+    delete $args{callback};
 
     $self->{communicator}->send_message(
         bt_build_packet(
@@ -237,6 +239,15 @@ sub process_message_from_peer {
           unless $parsed_packet->{info_hash} eq $self->{info_hash};
         croak 'unexpected peer id received'
           unless $parsed_packet->{peer_id} eq $self->{peer_id};
+
+        my $bitfield = pack( "b*", join( '', @{ $self->{downloaded} } ) );
+        $self->{communicator}->send_message(
+            bt_build_packet(
+                bt_code      => BT_BITFIELD,
+                bitfield_ref => \$bitfield,
+            )
+        );
+
         return;
     }
 
@@ -283,6 +294,10 @@ sub process_message_from_peer {
                     $parsed_packet->{block_offset} eq $request->{block_offset} )
                 {
                     if ( $block_size eq $request->{block_size} ) {
+                        $self->{requested_by_client}->[$index]->{callback}
+                          ->( $parsed_packet->{data_ref} )
+                          if exists $self->{requested_by_client}->[$index]
+                          ->{callback};
                         splice @{ $self->{requested_by_client} }, $index, 1;
                         return;
                     }
