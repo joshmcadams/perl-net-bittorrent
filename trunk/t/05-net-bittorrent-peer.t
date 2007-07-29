@@ -8,11 +8,11 @@ use Test::More;
 use Test::MockObject;
 use Net::BitTorrent::PeerPacket qw(:all);
 
-my @downloaded = ( 0, 1, 2 );
-my $bitfield  = pack( "b*", '11100000' );
+my @downloaded = ( 1, 1, 1, 0, 0, 0, 0, 0 );
+my $bitfield  = pack( "b*", join( '', @downloaded ) );
 my $info_hash = 'A' x 20;
-my $client_id = 'B' x 20;                   # local peer id
-my $peer_id   = 'C' x 20;                   # remote peer id
+my $client_id = 'B' x 20;                                # local peer id
+my $peer_id   = 'C' x 20;                                # remote peer id
 
 __PACKAGE__->runtests() unless caller;
 
@@ -77,7 +77,7 @@ sub valid_handshake : Tests {
 
     # expect that a handshake, and only a handshake, was sent
     is(
-        shift @{ $self->{comm}->{messages} },
+        $self->next_message_in_queue,
         bt_build_packet(
             bt_code   => BT_HANDSHAKE,
             info_hash => $info_hash,
@@ -86,11 +86,21 @@ sub valid_handshake : Tests {
         'got a handshake'
     );
 
-    is( shift @{ $self->{comm}->{messages} }, undef, 'only a single message' );
+    is( $self->next_message_in_queue, undef, 'only a single message' );
 
     # be a nice peer and respond with our own handshake
     eval { $self->send_handshake_to_peer; };
     ok( not($@), $@ || 'return on handshake accepted' );
+
+    # after we shake back, we get the bitfield
+    is(
+        $self->next_message_in_queue,
+        bt_build_packet(
+            bt_code      => BT_BITFIELD,
+            bitfield_ref => \$bitfield
+        ),
+        'got a bitfield'
+    );
 
     # check initial settings
     is_deeply( $self->{peer}->has(), [], 'peer has no pieces' );
@@ -98,13 +108,13 @@ sub valid_handshake : Tests {
 
     $self->send_bitfield_to_peer;
 
-    is_deeply( $self->{peer}->has(), [ 0, 1, 2 ], 'read bitfield correctly' );
+    is_deeply( $self->{peer}->has(), [ 0, 1, 2 ], 'tracked what we have' );
 }
 
 sub choking : Tests {
     my ($self) = @_;
 
-    $self->send_handshake_to_peer->next_message_in_queue;    # eat the handshake
+    $self->send_handshake_to_peer->next_message_in_queue(2); # eat the handshake
 
     is( $self->{peer}->choking(), 1, 'we are initially choking' );
 
@@ -146,7 +156,7 @@ sub being_choked : Tests {
 sub interested : Tests {
     my ($self) = @_;
 
-    $self->send_handshake_to_peer->next_message_in_queue;    # eat the handshake
+    $self->send_handshake_to_peer->next_message_in_queue(2); # eat the handshake
 
     is( $self->{peer}->interested(),
         0, 'we are initially not interested in the peer' );
@@ -218,7 +228,7 @@ sub bitfield_after_choke : Tests {
 sub have : Tests {
     my ($self) = @_;
 
-    eval { $self->send_handshake_to_peer->next_message_in_queue; };
+    eval { $self->send_handshake_to_peer->next_message_in_queue(2); };
     ok( not($@), $@ || 'shaking hands' );
 
     is_deeply( $self->{peer}->have(), [], 'nothing to start with' );
@@ -272,12 +282,12 @@ sub has : Tests {
 sub request : Tests {
     my ($self) = @_;
 
-    eval { $self->send_handshake_to_peer->next_message_in_queue; };
+    eval { $self->send_handshake_to_peer->next_message_in_queue(2); };
     ok( not($@), $@ || 'shaking hands' );
 
     my %request = ( piece_index => 4, block_offset => 0, block_size => 100 );
 
-    $self->{peer}->request(%request);
+    $self->{peer}->request( %request, callback => sub { } );
 
     is(
         $self->next_message_in_queue,
@@ -326,7 +336,7 @@ sub requested_by_peer : Tests {
 sub piece : Tests {
     my ($self) = @_;
 
-    eval { $self->send_handshake_to_peer->next_message_in_queue; };
+    eval { $self->send_handshake_to_peer->next_message_in_queue(2); };
     ok( not($@), $@ || 'shaking hands' );
 
     my $piece_index  = 1;
@@ -358,22 +368,26 @@ sub piece : Tests {
     is_deeply( $self->{peer}->requested_by_peer, [], 'cleared request queue' );
 }
 
-sub incoming_piece : Tests {
+sub zincoming_piece : Tests {
     my ($self) = @_;
 
-    eval { $self->send_handshake_to_peer->next_message_in_queue; };
+    eval { $self->send_handshake_to_peer->next_message_in_queue(2); };
     ok( not($@), $@ || 'shaking hands' );
 
+    my $returned_data_ref;
     my $piece_index  = 1;
     my $block_offset = 0;
     my $block_size   = 0;
     my $data         = '0123456789';
+    my $callback     =
+      sub { print "CALLING BACK MOTHER FUCKER\n"; $returned_data_ref = shift; };
     { use bytes; $block_size = length($data); }
 
     $self->{peer}->request(
         piece_index  => $piece_index,
         block_offset => $block_offset,
-        block_size   => $block_size
+        block_size   => $block_size,
+        callback     => $callback,
     );
 
     is_deeply(
@@ -382,7 +396,8 @@ sub incoming_piece : Tests {
             {
                 piece_index  => $piece_index,
                 block_offset => $block_offset,
-                block_size   => $block_size
+                block_size   => $block_size,
+                callback     => $callback,
             }
         ],
         'cleared request queue'
@@ -407,12 +422,14 @@ sub incoming_piece : Tests {
 
     is_deeply( $self->{peer}->requested_by_client, [],
         'cleared request queue' );
+
+    is_deeply( ${$returned_data_ref}, $data, 'returned data matches' );
 }
 
 sub unrequested_piece : Tests {
     my ($self) = @_;
 
-    eval { $self->send_handshake_to_peer->next_message_in_queue; };
+    eval { $self->send_handshake_to_peer->next_message_in_queue(2); };
     ok( not($@), $@ || 'shaking hands' );
 
     my $piece_index  = 1;
@@ -475,10 +492,15 @@ sub unrequested_piece : Tests {
 sub cancel : Tests {
     my ($self) = @_;
 
-    eval { $self->send_handshake_to_peer->next_message_in_queue; };
+    eval { $self->send_handshake_to_peer->next_message_in_queue(2); };
     ok( not($@), $@ || 'shaking hands' );
 
-    my %request = ( piece_index => 0, block_offset => 100, block_size => 10 );
+    my %request = (
+        piece_index  => 0,
+        block_offset => 100,
+        block_size   => 10,
+        callback     => sub { }
+    );
 
     $self->{peer}->request(%request);
     $self->next_message_in_queue;
@@ -522,8 +544,12 @@ sub incoming_cancel : Tests {
 }
 
 sub next_message_in_queue {
-    my ($self) = @_;
-    return shift @{ $self->{comm}->{messages} };
+    my ( $self, $message_count ) = ( @_, 1 );
+    my @messages;
+    for ( 1 .. $message_count ) {
+        push @messages, ( shift @{ $self->{comm}->{messages} } );
+    }
+    return $message_count == 1 ? $messages[0] : @messages;
 }
 
 sub send_handshake_to_peer {
