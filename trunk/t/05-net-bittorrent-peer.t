@@ -215,6 +215,60 @@ sub bitfield_after_choke : Tests {
     ok( $@, 'can not send bitfield after choke' );
 }
 
+sub have : Tests {
+    my ($self) = @_;
+
+    eval { $self->send_handshake_to_peer->next_message_in_queue; };
+    ok( not($@), $@ || 'shaking hands' );
+
+    is_deeply( $self->{peer}->have(), [], 'nothing to start with' );
+
+    $self->{peer}->have(4);
+
+    is(
+        $self->next_message_in_queue,
+        bt_build_packet( bt_code => BT_HAVE, piece_index => 4 ),
+        'a notice about packet four was sent'
+    );
+
+    is_deeply( $self->{peer}->have(), [4], 'now I have piece four' );
+
+    $self->{peer}->have(3);
+
+    is(
+        $self->next_message_in_queue,
+        bt_build_packet( bt_code => BT_HAVE, piece_index => 3 ),
+        'a notice about packet three was sent'
+    );
+
+    is_deeply(
+        [ sort @{ $self->{peer}->have() } ],
+        [ 3, 4 ],
+        'now I have piece four'
+    );
+}
+
+sub has : Tests {
+    my ($self) = @_;
+
+    eval { $self->send_handshake_to_peer->next_message_in_queue; };
+    ok( not($@), $@ || 'shaking hands' );
+
+    is_deeply( $self->{peer}->has(), [], 'nothing to start with' );
+
+    $self->send_to_peer( bt_code => BT_HAVE, piece_index => 2 );
+
+    is_deeply( $self->{peer}->has(), [2], 'peer has index two' );
+
+    $self->send_to_peer( bt_code => BT_HAVE, piece_index => 0 );
+
+    is_deeply(
+        [ sort @{ $self->{peer}->has() } ],
+        [ 0, 2 ],
+        'peer has indexes zero and two'
+    );
+}
+
 sub next_message_in_queue {
     my ($self) = @_;
     return shift @{ $self->{comm}->{messages} };
@@ -252,11 +306,4 @@ sub send_to_peer {
     return $self;
 }
 
-__END__
-
-    #print split(//, unpack("b*", $bitfield)), "\n";
-    #is($bitfield, $vec, 'bits twiddled');
-    #$peer->show_interest();
-    #is( $peer->interested(), 1, 'we are interested now' );
-    #is($peer->choked(), 0, 'now we are not choked');
-
+1;
