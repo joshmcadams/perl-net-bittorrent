@@ -269,6 +269,58 @@ sub has : Tests {
     );
 }
 
+sub request : Tests {
+    my ($self) = @_;
+
+    eval { $self->send_handshake_to_peer->next_message_in_queue; };
+    ok( not($@), $@ || 'shaking hands' );
+
+    $self->{peer}->request( 4, 0, 100 );
+
+    is(
+        $self->next_message_in_queue,
+        bt_build_packet(
+            bt_code      => BT_REQUEST,
+            piece_index  => 4,
+            block_offset => 0,
+            block_size   => 100
+        ),
+        'request the first few bytes of a piece'
+    );
+}
+
+sub requested : Tests {
+    my ($self) = @_;
+
+    eval { $self->send_handshake_to_peer->next_message_in_queue; };
+    ok( not($@), $@ || 'shaking hands' );
+    $self->send_to_peer(
+        bt_code      => BT_REQUEST,
+        piece_index  => 10,
+        block_offset => 12345,
+        block_size   => 9876
+    );
+    is_deeply(
+        $self->{peer}->requested(),
+        [ { piece_index => 10, block_offset => 12345, block_size => 9876 } ],
+        'added a piece to the queue'
+    );
+    $self->send_to_peer(
+        bt_code      => BT_REQUEST,
+        piece_index  => 12,
+        block_offset => 0,
+        block_size   => 1000
+    );
+    is_deeply(
+        $self->{peer}->requested(),
+        [
+            { piece_index => 10, block_offset => 12345, block_size => 9876 },
+            { piece_index => 12, block_offset => 0,     block_size => 1000 },
+        ],
+        'added a piece to the queue'
+    );
+}
+
 sub next_message_in_queue {
     my ($self) = @_;
     return shift @{ $self->{comm}->{messages} };
