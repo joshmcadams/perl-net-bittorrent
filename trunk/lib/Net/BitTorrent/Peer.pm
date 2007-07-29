@@ -159,6 +159,39 @@ sub requested {
     return $self->{requested};
 }
 
+sub piece {
+    my ( $self, $piece_index, $block_offset, $data_ref ) = @_;
+
+    my $size;
+    { use bytes; $size = length( ${$data_ref} ); }
+
+    my $index = 0;
+    for my $request ( @{ $self->{requested} || [] } ) {
+        if ( $piece_index eq $request->{piece_index} ) {
+            if ( $block_offset eq $request->{block_offset} ) {
+                if ( $size eq $request->{block_size} ) {
+
+                    $self->{communicator}->send_message(
+                        bt_build_packet(
+                            bt_code      => BT_PIECE,
+                            piece_index  => $piece_index,
+                            block_offset => $block_offset,
+                            data_ref     => $data_ref
+                        )
+                    );
+
+                    splice @{ $self->{requested} }, $index, 1;
+
+                    return;
+                }
+            }
+        }
+        ++$index;
+    }
+
+    croak 'unable to find request matching piece';
+}
+
 sub process_message_from_peer {
     my ( $self, $message ) = @_;
 
@@ -208,6 +241,8 @@ sub process_message_from_peer {
     elsif ( $parsed_packet->{bt_code} == BT_REQUEST ) {
         delete $parsed_packet->{bt_code};
         push @{ $self->{requested} }, $parsed_packet;
+    }
+    elsif ( $parsed_packet->{bt_code} == BT_PIECE ) {
     }
 
     return;
