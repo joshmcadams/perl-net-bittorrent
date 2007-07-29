@@ -144,7 +144,12 @@ sub show_disinterest {
 sub request {
     my ( $self, %args ) = @_;
 
-    push @{ $self->{requested_by_client} }, {%args};
+    push @{ $self->{requested_by_client} }, {%args}
+      unless grep                           {
+             $args{piece_index} == $_->{piece_index}
+          && $args{block_offset} == $_->{block_offset}
+          && $args{block_size} == $_->{block_size}
+      } @{ $self->{requested_by_client} };
 
     delete $args{callback};
 
@@ -193,23 +198,21 @@ sub cancel {
 }
 
 sub piece {
-    my ( $self, $piece_index, $block_offset, $data_ref ) = @_;
+    my ( $self, %args ) = @_;
 
-    my $size;
-    { use bytes; $size = length( ${$data_ref} ); }
+    my $block_size;
+    { use bytes; $block_size = length( ${ $args{data_ref} } ); }
 
     my $index = 0;
     for my $request ( @{ $self->{requested_by_peer} || [] } ) {
-        if ( $piece_index eq $request->{piece_index} ) {
-            if ( $block_offset eq $request->{block_offset} ) {
-                if ( $size eq $request->{block_size} ) {
+        if ( $args{piece_index} eq $request->{piece_index} ) {
+            if ( $args{block_offset} eq $request->{block_offset} ) {
+                if ( $block_size eq $request->{block_size} ) {
 
                     $self->{communicator}->send_message(
                         bt_build_packet(
-                            bt_code      => BT_PIECE,
-                            piece_index  => $piece_index,
-                            block_offset => $block_offset,
-                            data_ref     => $data_ref
+                            bt_code => BT_PIECE,
+                            %args
                         )
                     );
 
@@ -282,7 +285,12 @@ sub process_message_from_peer {
     }
     elsif ( $parsed_packet->{bt_code} == BT_REQUEST ) {
         delete $parsed_packet->{bt_code};
-        push @{ $self->{requested_by_peer} }, $parsed_packet;
+        push @{ $self->{requested_by_peer} }, $parsed_packet
+          unless grep {
+                 $parsed_packet->{piece_index} == $_->{piece_index}
+              && $parsed_packet->{block_offset} == $_->{block_offset}
+              && $parsed_packet->{block_size} == $_->{block_size}
+          } @{ $self->{requested_by_peer} };
     }
     elsif ( $parsed_packet->{bt_code} == BT_PIECE ) {
         my $index      = 0;
