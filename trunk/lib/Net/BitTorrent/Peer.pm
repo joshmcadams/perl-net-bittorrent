@@ -141,6 +141,24 @@ sub show_disinterest {
     return $self;
 }
 
+sub request {
+    my ( $self, $piece_index, $block_offset, $block_size ) = @_;
+
+    $self->{communicator}->send_message(
+        bt_build_packet(
+            bt_code      => BT_REQUEST,
+            piece_index  => $piece_index,
+            block_offset => $block_offset,
+            block_size   => $block_size
+        )
+    );
+}
+
+sub requested {
+    my ($self) = @_;
+    return $self->{requested};
+}
+
 sub process_message_from_peer {
     my ( $self, $message ) = @_;
 
@@ -186,6 +204,10 @@ sub process_message_from_peer {
     }
     elsif ( $parsed_packet->{bt_code} == BT_HAVE ) {
         push @{ $self->{has} }, $parsed_packet->{piece_index};
+    }
+    elsif ( $parsed_packet->{bt_code} == BT_REQUEST ) {
+        delete $parsed_packet->{bt_code};
+        push @{ $self->{requested} }, $parsed_packet;
     }
 
     return;
