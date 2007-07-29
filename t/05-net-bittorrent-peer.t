@@ -321,6 +321,110 @@ sub requested : Tests {
     );
 }
 
+sub piece : Tests {
+    my ($self) = @_;
+
+    eval { $self->send_handshake_to_peer->next_message_in_queue; };
+    ok( not($@), $@ || 'shaking hands' );
+
+    my $piece_index  = 1;
+    my $block_offset = 0;
+    my $block_size   = 0;
+    my $data         = '0123456789';
+    { use bytes; $block_size = length($data); }
+
+    $self->send_to_peer(
+        bt_code      => BT_REQUEST,
+        piece_index  => $piece_index,
+        block_offset => $block_offset,
+        block_size   => $block_size
+    );
+
+    $self->{peer}->piece( $piece_index, $block_offset, \$data );
+
+    is_deeply(
+        $self->next_message_in_queue,
+        bt_build_packet(
+            bt_code      => BT_PIECE,
+            piece_index  => $piece_index,
+            block_offset => $block_offset,
+            data_ref     => \$data
+        ),
+        'sent piece successfully'
+    );
+
+    is_deeply( $self->{peer}->requested, [], 'cleared request queue' );
+}
+
+sub unrequested_piece : Tests {
+    my ($self) = @_;
+
+    eval { $self->send_handshake_to_peer->next_message_in_queue; };
+    ok( not($@), $@ || 'shaking hands' );
+
+    my $piece_index  = 1;
+    my $block_offset = 0;
+    my $block_size   = 0;
+    my $data         = '0123456789';
+    { use bytes; $block_size = length($data); }
+
+    eval { $self->{peer}->piece( $piece_index, $block_offset, \$data ); };
+    ok( $@, 'got an unrequested piece when no requests have been made' );
+
+    my @requests;
+    for my $offset ( 0 .. 2 ) {
+        $self->send_to_peer(
+            bt_code      => BT_REQUEST,
+            piece_index  => $piece_index + $offset,
+            block_offset => $block_offset,
+            block_size   => $block_size
+        );
+        push @requests,
+          {
+            piece_index  => $piece_index + $offset,
+            block_offset => $block_offset,
+            block_size   => $block_size
+          };
+    }
+
+    eval { $self->{peer}->piece( $piece_index + 10, $block_offset, \$data ); };
+    ok( $@, 'got an unrequested piece on piece index' );
+
+    eval { $self->{peer}->piece( $piece_index, $block_offset + 1, \$data ); };
+    ok( $@, 'got an unrequested piece on block offset' );
+
+    eval {
+        my $d = substr( $data, 1, 1 );
+        $self->{peer}->piece( $piece_index, $block_offset, \$d );
+    };
+    ok( $@, 'got an unrequested piece on block size' );
+
+    is_deeply( $self->{peer}->requested, \@requests, 'kept request queue' );
+
+    $self->{peer}->piece( $piece_index, $block_offset, \$data );
+    is_deeply(
+        $self->next_message_in_queue,
+        bt_build_packet(
+            bt_code      => BT_PIECE,
+            piece_index  => $piece_index,
+            block_offset => $block_offset,
+            data_ref     => \$data
+        ),
+        'sent piece successfully'
+    );
+
+    shift @requests;
+    is_deeply( $self->{peer}->requested, \@requests, 'cleared request queue' );
+}
+
+sub cancel : Tests {
+    my ($self) = @_;
+
+    eval { $self->send_handshake_to_peer->next_message_in_queue; };
+    ok( not($@), $@ || 'shaking hands' );
+
+}
+
 sub next_message_in_queue {
     my ($self) = @_;
     return shift @{ $self->{comm}->{messages} };
