@@ -35,6 +35,7 @@ sub _set_defaults {
     $self->{interesting}       = 0;
     $self->{interested}        = 0;
     $self->{has}               = [];
+    $self->{have}              = [];
     $self->{communicator}->set_callback(
         sub {
             $self->process_message_from_peer(@_);
@@ -60,6 +61,22 @@ sub _initiate_communication {
 
 sub has {
     return shift->{has};
+}
+
+sub have {
+    my ( $self, $piece_index ) = @_;
+
+    if ( defined $piece_index ) {
+        $self->{communicator}->send_message(
+            bt_build_packet(
+                bt_code     => BT_HAVE,
+                piece_index => $piece_index
+            )
+        );
+        push @{ $self->{have} }, $piece_index;
+    }
+
+    return $self->{have};
 }
 
 sub choked {
@@ -166,6 +183,9 @@ sub process_message_from_peer {
     }
     elsif ( $parsed_packet->{bt_code} == BT_UNINTERESTED ) {
         $self->{interesting} = 0;
+    }
+    elsif ( $parsed_packet->{bt_code} == BT_HAVE ) {
+        push @{ $self->{has} }, $parsed_packet->{piece_index};
     }
 
     return;
