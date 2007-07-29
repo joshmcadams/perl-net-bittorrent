@@ -275,7 +275,9 @@ sub request : Tests {
     eval { $self->send_handshake_to_peer->next_message_in_queue; };
     ok( not($@), $@ || 'shaking hands' );
 
-    $self->{peer}->request( 4, 0, 100 );
+    my %request = ( piece_index => 4, block_offset => 0, block_size => 100 );
+
+    $self->{peer}->request(%request);
 
     is(
         $self->next_message_in_queue,
@@ -289,7 +291,7 @@ sub request : Tests {
     );
 }
 
-sub requested : Tests {
+sub requested_by_peer : Tests {
     my ($self) = @_;
 
     eval { $self->send_handshake_to_peer->next_message_in_queue; };
@@ -301,7 +303,7 @@ sub requested : Tests {
         block_size   => 9876
     );
     is_deeply(
-        $self->{peer}->requested(),
+        $self->{peer}->requested_by_peer(),
         [ { piece_index => 10, block_offset => 12345, block_size => 9876 } ],
         'added a piece to the queue'
     );
@@ -312,7 +314,7 @@ sub requested : Tests {
         block_size   => 1000
     );
     is_deeply(
-        $self->{peer}->requested(),
+        $self->{peer}->requested_by_peer(),
         [
             { piece_index => 10, block_offset => 12345, block_size => 9876 },
             { piece_index => 12, block_offset => 0,     block_size => 1000 },
@@ -353,7 +355,7 @@ sub piece : Tests {
         'sent piece successfully'
     );
 
-    is_deeply( $self->{peer}->requested, [], 'cleared request queue' );
+    is_deeply( $self->{peer}->requested_by_peer, [], 'cleared request queue' );
 }
 
 sub unrequested_piece : Tests {
@@ -399,7 +401,8 @@ sub unrequested_piece : Tests {
     };
     ok( $@, 'got an unrequested piece on block size' );
 
-    is_deeply( $self->{peer}->requested, \@requests, 'kept request queue' );
+    is_deeply( $self->{peer}->requested_by_peer,
+        \@requests, 'kept request queue' );
 
     $self->{peer}->piece( $piece_index, $block_offset, \$data );
     is_deeply(
@@ -414,7 +417,8 @@ sub unrequested_piece : Tests {
     );
 
     shift @requests;
-    is_deeply( $self->{peer}->requested, \@requests, 'cleared request queue' );
+    is_deeply( $self->{peer}->requested_by_peer,
+        \@requests, 'cleared request queue' );
 }
 
 sub cancel : Tests {
@@ -423,6 +427,26 @@ sub cancel : Tests {
     eval { $self->send_handshake_to_peer->next_message_in_queue; };
     ok( not($@), $@ || 'shaking hands' );
 
+    my %request = ( piece_index => 0, block_offset => 100, block_size => 10 );
+
+    $self->{peer}->request(%request);
+    $self->next_message_in_queue;
+
+    is_deeply(
+        $self->{peer}->requested_by_client,
+        [ \%request ],
+        'made a request'
+    );
+
+    $self->{peer}->cancel(%request);
+
+    is_deeply( $self->{peer}->requested_by_client, [], 'canceled the request' );
+
+    is(
+        $self->next_message_in_queue,
+        bt_build_packet( bt_code => BT_CANCEL, %request ),
+        'cancel message sent'
+    );
 }
 
 sub next_message_in_queue {
