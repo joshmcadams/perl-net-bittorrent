@@ -344,3 +344,194 @@ sub process_message_from_peer {
 
 1;
 
+__END__
+
+=head1 NAME
+
+Net::BitTorrent::Peer
+
+=head1 DESCRIPTION
+
+The C<Net::BitTorrent::Peer> object provides an internal interface for communicating
+with peers in a BitTorrent swarm.  The interface doesn't do any networking, but instead
+relies on a communicator to do the socket-talking on it's behalf and reply to incoming
+messages with callbacks.
+
+=head1 SYNOPSYS
+
+=head1 METHODS
+
+=head2 Public
+
+=head3 new
+
+Creates a new C<Net::BitTorrent::Peer> object.  There are a few arguments that
+the constructor requires:
+
+=head4 info_hash
+
+The info hash that uniquely identifies the swarm that the C<.torrent> represents.
+
+=head4 client_id
+
+The 20-byte identifier for the local client.
+
+=head4 peer_id
+
+The 20-byte identifier for the remote peer.
+
+=head4 downloaded
+
+A reference to an array that contains an entry for each piece in the torrent.  If the
+piece has already been successfully downloaded by the client, the array element with
+the same index contains a value of 1.  If the piece has not been downloaded, the array
+element with the same index contains a value of 0.
+
+=head5 communicator
+
+A reference to a C<Net::BitTorrent::PeerCommunicator> object.
+
+=head3 has
+
+Returns an array reference containing a list of piece indexes that the peer has.
+
+=head3 have
+
+Informs the peer that the local client has a new piece.
+
+=head3 choked
+
+Returns true if we are choked, false if not.
+
+=head3 choking
+
+Returns true if we are choking the peer, false if not.
+
+=head3 choke
+
+Informs the peer that we are choking it.
+
+=head3 unchoke
+
+Informs the peer that we are uncoking it.
+
+=head3 interesting
+
+Returns true if the peer finds us interesting, false if not.
+
+=head3 interested
+
+Returns true if we are intested in the peer, false if not.
+
+=head3 show_interest
+
+Informs the peer that we are interested in it.
+
+=head3 show_disinterest
+
+Informs the peer that we are not interested in it.
+
+=head3 request
+
+Requests a block of a piece from a peer.
+
+=head4 piece_index
+
+Zero-based index of the piece that we need.
+
+=head4 block_offset
+
+Zero-based offset of the starting point of the block that we
+are requesting.
+
+=head4 block_size
+
+Size of the block that we are requesting.
+
+=head4 callback
+
+Subroutine reference that will be called back when the peer responds to the
+request.  The first argument to the callback will be a reference to the 
+data that the peer returned.
+
+=head3 requested_by_peer
+
+Returns a reference to an array of requests made by the peer.  Each request
+is a hash reference with the following three keys:
+
+=head4 piece_index
+
+Zero-based index of the piece that was requested.
+
+=head4 block_offset
+
+Zero-based offset of the start of the block that is being requested from
+within the piece.
+
+=head4 block_size
+
+Size of the data block being requested from within the piece.
+
+=head3 requested_by_client
+
+Returns a reference to an array of requests made by the client.  Each request
+is a hash reference with the following four keys:
+
+=head4 piece_index
+
+Zero-based index of the piece that was requested.
+
+=head4 block_offset
+
+Zero-based offset of the start of the block that is being requested from
+within the piece.
+
+=head4 block_size
+
+Size of the data block being requested from within the piece.
+
+=head4 callback
+
+Reference to a subroutine that will be called back when the peer responds to
+the request.
+
+=head3 cancel
+
+Tell the peer that we no longer need a piece the we requested.
+
+=head3 piece
+
+Return a block of data to the peer.  Each piece call requires the following
+arguments:
+
+=head4 piece_index
+
+Zero-based index of the piece that was requested.
+
+=head4 block_offset
+
+Zero-based offset of the start of the block that is being requested from
+within the piece.
+
+=head4 data_ref
+
+Reference to the data that will be sent to the peer.
+
+=head3 process_message_from_peer
+
+=head2 Private
+
+=head3 _verify_args
+
+Verifies that the constructor was passed reasonable arguments.
+
+=head3 _set_defaults
+
+Sets default arguments for the constructor.
+
+=head3 _initiate_communication
+
+Send a handshake and bitfield to the peer.
+
+=cut
+
