@@ -204,3 +204,93 @@ sub _are_we_done_yet {
 
 1;
 
+__END__
+
+=pod
+
+=head1 NAME
+
+Net::BitTorrent::File::Download
+
+=head1 DESCRIPTION
+
+Object that wraps the file physically found on the local disk.
+
+=head1 SYNOPSYS
+
+=head1 METHODS
+
+=head2 Public
+
+=head3 new
+
+Returns a new C<Net::BitTorrent::File::Download> object.  The constructor
+accepts one argument:
+
+=head4 dt_obj
+
+A reference to a C<Net::BitTorrent::File::DotTorrent> object.
+
+=head3 get_remaining_piece_list
+
+Returns a reference to an array of indexes that have not been fully downloaded.
+
+=head3 get_completed_piece_list
+
+Returns a reference to an array of indexes that have been fully downloaded.
+
+=head3 get_remaining_blocks_list_for_piece
+
+Returns a reference to an array of hashes that represent blocks that still
+need to be downloaded within a piece.  The keys in the hashes are:
+
+=head4 offset
+
+Block offset within piece.
+
+=head4 size
+
+Block size within piece.
+
+=head3 write_block
+
+Writes data to the downloaded file(s).  The method accepts three arguments:
+
+=head4 piece
+
+Zero-based index of the piece that is being written to.
+
+=head4 offset
+
+Block-offset for the data that is being written to within the piece.
+
+=head4 data_ref
+
+Scalar reference to the data that will be written.
+
+=head2 Private
+
+=head3 _check_arguments
+
+Make sure that the constructor was passed reasonable arguments.
+
+=head3 _pick_up_where_we_left_off
+
+If we are resuming a download, determine how far along we were.
+
+=head3 _build_out_directories
+
+If this is a multi-file torrent, build out the directory structure that we'll
+need to write the data files to.
+
+=head3 _write_pieces_to_file
+
+After we have downloaded all of the pieces to individual piece files, we need
+to put them together into the final files.
+
+=head3 _are_we_done_yet
+
+See if we are finished.
+
+=cut
+
