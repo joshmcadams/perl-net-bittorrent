@@ -134,21 +134,25 @@ How much of the torrent file is left to be downloaded?
 
 A keyword sent to the tracker to signfy status:
 
-=head5 started
+=over 4
+
+=item * started
 
 Sent when the downlaod first begins (or resumes).
 
-=head5 completed (unimplemented)
+=item * completed (unimplemented)
 
 Sent when downloading is complete.
 
-=head5 stopped (unimplemented)
+=item * stopped (unimplemented)
 
 Sent when leaving the torrent.
 
-=head5 empty
+=item * empty
 
 Default when no C<left> argument is present.  This signifies a keep-alive.
+
+=back
 
 =cut
 
