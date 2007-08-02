@@ -1,5 +1,4 @@
 - implement peer communicator
-- document interfaces
 - create a single threaded download for a functional test
 - integrate with multiprocess system
 - pluggable algorithm
