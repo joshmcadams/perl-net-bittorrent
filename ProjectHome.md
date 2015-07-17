@@ -1,0 +1,1 @@
+This project is an attempt to port the popular BitTorrent system to Perl.
